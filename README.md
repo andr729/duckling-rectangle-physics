@@ -2,7 +2,7 @@
 
 > [!Note]
 > This is a simple, experimental project written in very early, experimental version of Duckling.
-> It was created as one a first experiments with the language.
+> It was created as one of a first experiments with the language.
 > See Duckling at [https://duckling.pl/](https://duckling.pl/).
 
 Rectangle physics – rotating, rigid, 2D rectangle physics simulation written in very early, experimental version of Duckling.
