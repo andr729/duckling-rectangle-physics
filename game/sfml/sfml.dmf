@@ -1,0 +1,71 @@
+#{
+# Important notice:
+# This code is written in a very early, experimental version of Duckling.
+# The code is not meant to be pretty or well-structured,
+# but rather to be a simple, early test of the language.
+# It assumes an absence of many features, uses some hacks and workarounds,
+# and is generally not a good example of how to write code in Duckling.
+# It might not compile with the newer versions of the compiler.
+# 
+# Duckling part of the ad-hoc SFML port.
+#}
+
+extern("C") fundecl sfml_port_init() -> ();
+extern("C") fundecl sfml_port_deinit() -> ();
+
+extern("C") fundecl sfml_port_is_open() -> bool;
+
+extern("C") fundecl sfml_port_windows_clear() -> ();
+extern("C") fundecl sfml_port_display() -> ();
+extern("C") fundecl sfml_frame_clock() -> f64;
+
+extern("C") fundecl sfml_port_poll_events() -> ();
+
+extern("C") fundecl sfml_draw_rectangle(x: f64, y: f64, width: f64, height: f64, rotation: f64) -> ();
+extern("C") fundecl sfml_draw_debug_arrow(x1: f64, y1: f64, x2: f64, y2: f64) -> ();
+
+extern("C") fundecl sfml_port_was_arrow_down() -> bool;
+extern("C") fundecl sfml_port_was_arrow_up() -> bool;
+extern("C") fundecl sfml_port_was_arrow_left() -> bool;
+extern("C") fundecl sfml_port_was_arrow_right() -> bool;
+
+extern("C") fundecl sfml_port_mouse_x_pos() -> f64; 
+extern("C") fundecl sfml_port_mouse_y_pos() -> f64;
+
+
+fun init() = sfml_port_init();
+
+fun deinit() = sfml_port_deinit();
+
+fun is_open() -> bool = sfml_port_is_open();
+
+fun windows_clear() = sfml_port_windows_clear();
+
+fun display() = sfml_port_display();
+
+fun frame_clock() -> f64 = sfml_frame_clock();
+
+fun poll_events() = sfml_port_poll_events();
+
+fun draw_rectangle(x: f64, y: f64, width: f64, height: f64, rotation: f64) = sfml_draw_rectangle(x, y, width, height, rotation);
+
+fun draw_debug_arrow(x1: f64, y1: f64, x2: f64, y2: f64) = sfml_draw_debug_arrow(x1, y1, x2, y2);
+
+fun post_was_arrow_down() -> bool = sfml_port_was_arrow_down();
+
+fun post_was_arrow_up() -> bool = sfml_port_was_arrow_up();
+
+fun post_was_arrow_left() -> bool = sfml_port_was_arrow_left();
+
+fun post_was_arrow_right() -> bool = sfml_port_was_arrow_right();
+
+
+class MousePos {
+    x: f64;
+    y: f64;
+}
+
+fun mouse_pos() = MousePos(
+    x = sfml_port_mouse_x_pos(),
+    y = sfml_port_mouse_y_pos()
+);

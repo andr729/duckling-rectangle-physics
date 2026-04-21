@@ -1,0 +1,143 @@
+#{
+# Important notice:
+# This code is written in a very early, experimental version of Duckling.
+# The code is not meant to be pretty or well-structured,
+# but rather to be a simple, early test of the language.
+# It assumes an absence of many features, uses some hacks and workarounds,
+# and is generally not a good example of how to write code in Duckling.
+# It might not compile with the newer versions of the compiler.
+# 
+# Main game-loop and state management.
+# Note that it's not really a game, just a very simple physics simulation.
+#}
+
+import sfml            as sfml;
+import sfml.drawing    as d;
+import vectors         as v;
+import rect            as r;
+
+const rect_count = 30;
+
+class GameState {
+    # var main_rectangle: r.Rectangle;
+    # var second_rectangle: r.Rectangle;
+
+    var rectangles: r.Rectangle[rect_count];
+}
+
+
+fun simulate(game_state: ref GameState, delta_time: f64) = {
+
+    var i = 0;
+    while (i < rect_count) {
+        r.simulate(&game_state.rectangles[i], delta_time);
+        # apply gravity:
+        if (not game_state.rectangles[i].wall_like) {
+            game_state.rectangles[i].velocity = v.add(game_state.rectangles[i].velocity, v.Vector(0.0, 200.0 * delta_time));
+        }
+        i = i + 1;
+    }
+
+    i = 0;
+    while (i < rect_count) {
+        var j = i + 1;
+        while (j < rect_count) {
+            r.collide(&game_state.rectangles[i], &game_state.rectangles[j]);
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+
+    if (sfml.post_was_arrow_up()) {
+        game_state.rectangles[0].pos = v.add(game_state.rectangles[0].pos, v.Vector(0.0, -10.0));
+    }
+    if (sfml.post_was_arrow_right()) {
+        game_state.rectangles[0].velocity = v.add(game_state.rectangles[0].velocity, v.Vector(10.0, 0.0));
+    }
+    if (sfml.post_was_arrow_left()) {
+        game_state.rectangles[0].velocity = v.add(game_state.rectangles[0].velocity, v.Vector(-10.0, 0.0));
+    }
+}
+
+
+fun draw(game_state: ref GameState) = {
+    var i = 0;
+    while (i < rect_count) {
+        d.drawRectangle(&game_state.rectangles[i]);
+        i = i + 1;
+    }
+}
+
+fun main() = {
+    sfml.init();
+
+    var mock_rectangles: r.Rectangle[rect_count];
+
+    var game_state = GameState(mock_rectangles);
+
+    # set initial state of rectangles
+    var i = 0;
+    while (i < rect_count - 3) {
+        game_state.rectangles[i] = r.Rectangle(
+            pos = v.Vector(10.0 + f64(i)*15.0, -3000.0 + f64(i)*80.0),
+            width = 40.0,
+            height = 60.0,
+            velocity = v.Vector(),
+            rotation = 0.0,
+            angular_velocity = 0.12 * f64(i),
+            wall_like = false
+        );
+        i = i + 1;
+    }
+
+    # set 3 rectangles as walls:
+    game_state.rectangles[rect_count - 3] = r.Rectangle(
+        pos = v.Vector(600.0, 800.0),
+        width = 1200.0,
+        height = 20.0,
+        velocity = v.Vector(0.0, 0.0),
+        rotation = 0.0,
+        angular_velocity = 0.0,
+        wall_like = true
+    );
+    game_state.rectangles[rect_count - 2] = r.Rectangle(
+        pos = v.Vector(0.0, 400.0),
+        width = 20.0,
+        height = 800.0,
+        velocity = v.Vector(0.0, 0.0),
+        rotation = 0.0,
+        angular_velocity = 0.0,
+        wall_like = true
+    );
+    game_state.rectangles[rect_count - 1] = r.Rectangle(
+        pos = v.Vector(1200.0, 400.0),
+        width = 20.0,
+        height = 800.0,
+        velocity = v.Vector(0.0, 0.0),
+        rotation = 0.0,
+        angular_velocity = 0.0,
+        wall_like = true
+    );
+
+
+    while (sfml.is_open()) {
+        sfml.poll_events();
+        sfml.windows_clear();
+
+        var delta_time = sfml.frame_clock();
+
+        # var mouse_pos = sfml.mouse_pos();
+        # game_state.rectangles[0].pos = v.Vector(mouse_pos.x, mouse_pos.y);
+        # game_state.rectangles[0].velocity = v.Vector(0.0, 0.0);
+        # game_state.rectangles[0].angular_velocity = 0.0;
+
+        simulate(&game_state, delta_time);
+        draw(&game_state);
+
+        sfml.display();
+    }
+
+    sfml.deinit();
+
+    return 0;
+}

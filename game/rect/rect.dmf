@@ -1,0 +1,342 @@
+#{
+# Important notice:
+# This code is written in a very early, experimental version of Duckling.
+# The code is not meant to be pretty or well-structured,
+# but rather to be a simple, early test of the language.
+# It assumes an absence of many features, uses some hacks and workarounds,
+# and is generally not a good example of how to write code in Duckling.
+# It might not compile with the newer versions of the compiler.
+# 
+# Rectangle class and main collision detection and response.
+# It uses separation axis theorem for collision detection,
+# and *incorrect* but ok-ish collision response.
+#}
+
+
+import game.vectors as v;
+import game.math as math;
+import game.sfml as sfml;
+
+# A simple rectangle class, that handles its own position and velocity, and basic physics, like collusion with other rectangles.
+class Rectangle {
+    pos: v.Vector = v.Vector(); # this is a center position
+    rotation: f64 = 0.0; # in radians, clockwise, 0 means the rectangle is axis aligned
+
+    velocity: v.Vector = v.Vector(); # in units per second
+    angular_velocity: f64 = 0.0; # in radians per second, clockwise
+
+    width: f64 = 50.0;
+    height: f64 = 50.0;
+
+    wall_like: bool = false; # wall_like rectangles are not affected by collisions.
+}
+
+const friction_coefficient = 0.1;
+
+fun simulate(rect: ref Rectangle, delta_time: f64) = {
+    rect.pos      = v.add(rect.pos, v.mul(rect.velocity, delta_time));
+    rect.rotation = rect.rotation + rect.angular_velocity * delta_time;
+
+    # keep rotation in range [0, 2pi], for better numerical stability and to avoid overflow issues.
+    if (rect.rotation > 2.0 * math.pi) {
+        rect.rotation = rect.rotation - 2.0 * math.pi;
+    }
+    if (rect.rotation < 0.0) {
+        rect.rotation = rect.rotation + 2.0 * math.pi;
+    }
+}
+
+
+namespace collision {
+    fun initial_cutoff(rect1: ref Rectangle, rect2: ref Rectangle) -> bool = {
+        # debug it!
+        let half_diagonal2_1 = (rect1.width * rect1.width + rect1.height * rect1.height);
+        let half_diagonal2_2 = (rect2.width * rect2.width + rect2.height * rect2.height);
+        let max_distance2 = half_diagonal2_1 + half_diagonal2_2;
+        
+        let distance2 = v.length2(v.sub(rect1.pos, rect2.pos));
+        
+        return distance2 > max_distance2;
+    }
+
+
+    fun get4Points(rect: Rectangle) -> v.Vector[4] = {
+        let half_width = rect.width / 2.0;
+        let half_height = rect.height / 2.0;
+
+        let cos_rotation = math.cos(rect.rotation);
+        let sin_rotation = math.sin(rect.rotation);
+
+        var local_points: v.Vector[4];
+        local_points[0] = v.Vector(-half_width, -half_height);
+        local_points[1] = v.Vector(half_width, -half_height);
+        local_points[2] = v.Vector(half_width, half_height);
+        local_points[3] = v.Vector(-half_width, half_height);
+
+        var world_points: v.Vector[4];
+        
+        var i: i32 = 0;
+        
+        while (i < 4) {
+            let local_point = local_points[i];
+            let rotated_point = v.Vector(
+                local_point.x * cos_rotation - local_point.y * sin_rotation,
+                local_point.x * sin_rotation + local_point.y * cos_rotation
+            );
+            world_points[i] = v.add(rotated_point, rect.pos);
+            i = i + 1;
+        }
+        return world_points;
+    }
+
+    fun pointInside(point: v.Vector, rect: Rectangle) -> bool = {
+        let local_point = v.sub(point, rect.pos);
+
+        let cos_rotation = math.cos(-rect.rotation);
+        let sin_rotation = math.sin(-rect.rotation);
+
+        let rotated_point = v.Vector(
+            local_point.x * cos_rotation - local_point.y * sin_rotation,
+            local_point.x * sin_rotation + local_point.y * cos_rotation
+        );
+
+        return math.abs(rotated_point.x) <= rect.width / 2.0 and math.abs(rotated_point.y) <= rect.height / 2.0;
+    }
+
+    fun applyImpulse(rect: ref Rectangle, impulse: v.Vector, collision_point: v.Vector) = {
+        if (rect.wall_like) {
+            return;
+        }
+
+        # for simplicity we assume mass = 1  for all rectangles,
+        let mass = 1.0;
+        let moment_on_inertia = mass * (rect.width * rect.width + rect.height * rect.height) / 12.0; # this is the moment of inertia for a rectangle with mass = 1, around its center of mass  
+
+        rect.velocity = v.add(rect.velocity, v.mul(impulse, 1.0 / mass));
+
+        let r = v.sub(collision_point, rect.pos); # vector from center of mass to collision point
+        let angular_impulse = r.x * impulse.y - r.y * impulse.x; # this is the 2D cross product, which gives us the magnitude of the angular impulse, and the sign tells us the direction (clockwise or counterclockwise)
+        rect.angular_velocity = rect.angular_velocity + (angular_impulse / moment_on_inertia);
+    }
+
+    fun relativePointVelocity(rect: Rectangle, point: v.Vector) -> v.Vector = {
+        return v.add(rect.velocity, v.mul(v.normal_vector_no_normalize(v.sub(point, rect.pos)), rect.angular_velocity));
+    }
+}
+
+
+fun collide(rect1: ref Rectangle, rect2: ref Rectangle) -> () = {
+    
+    # debug draw the relative_velocity:
+    # let point = collision.get4Points(rect1)[0]; # just take the first point of rect1 for debugging
+
+    # var rel = collision.relativePointVelocity(rect1, point);
+
+    # sfml.draw_debug_arrow(
+    #     point.x, point.y,
+    #     point.x + rel.x, point.y + rel.y
+    # );
+
+    
+    if (collision.initial_cutoff(rect1, rect2)) {
+        return;
+    }
+
+    # now we implement separation axis theorem collision detection here:
+
+    let points1 = collision.get4Points(rect1);
+    let points2 = collision.get4Points(rect2);
+
+    var all_axes: v.Vector[8];
+
+    var min_overlap = math.inf;
+    var separation_vector = v.Vector();
+
+    var i = 0;
+    while (i < 4) {
+        all_axes[i] = v.normalize(v.Vector(
+            x = points1[(i + 1) % 4].x - points1[i].x,
+            y = points1[(i + 1) % 4].y - points1[i].y
+        ));
+        all_axes[i+4] = v.normalize(v.Vector(
+            x = points2[(i + 1) % 4].x - points2[i].x,
+            y = points2[(i + 1) % 4].y - points2[i].y
+        ));
+        i = i + 1;
+    }
+
+    var axis_index: i32 = 0;
+    while (axis_index < 8) {
+        let axis = all_axes[axis_index];
+        
+        # project points of both rectangles onto the axis
+
+        var rect1_min = math.inf;
+        var rect1_max = -math.inf;
+        var rect2_min = math.inf;
+        var rect2_max = -math.inf;
+
+        var r1_i = 0;
+        while (r1_i < 4) {
+            let proj = v.project_to_number(points1[r1_i], axis);
+            rect1_min = math.min(rect1_min, proj);
+            rect1_max = math.max(rect1_max, proj);
+            r1_i = r1_i + 1;
+        }
+        var r2_i = 0;
+        while (r2_i < 4) {
+            let proj = v.project_to_number(points2[r2_i], axis);
+            rect2_min = math.min(rect2_min, proj);
+            rect2_max = math.max(rect2_max, proj);
+            r2_i = r2_i + 1;
+        }
+
+        if (rect1_max < rect2_min or rect2_max < rect1_min) {
+            # no collision on this axis, so no collision at all
+            return;
+        }
+        else {
+            # collision found!
+            # let normal = v.normal_vector(axis);
+            let normal = v.normalize(axis); # why not normal??
+
+            # separation to move r1 out of r2:
+            let separation_length_forward = rect2_min - rect1_max;
+            let separation_length_backward = rect2_max - rect1_min;
+
+            if (math.abs(separation_length_forward) < math.abs(separation_length_backward)) {
+                if (math.abs(separation_length_forward) < min_overlap) {
+                    min_overlap = math.abs(separation_length_forward);
+                    separation_vector = v.mul(normal, separation_length_forward);
+                }
+            }
+            else {
+                if (math.abs(separation_length_backward) < min_overlap) {
+                    min_overlap = math.abs(separation_length_backward);
+                    separation_vector = v.mul(normal, separation_length_backward);
+                }
+            }
+
+
+            
+        }
+
+        
+
+        axis_index = axis_index + 1;
+    }
+
+    # separation vector moves rect1 out of rect2 here!
+
+    # now lets calculate the collision point:
+
+    var total_points_inside = 0;
+    var points_inside_sum: v.Vector = v.Vector(); 
+
+    i = 0;
+    while (i < 4) {
+        if (collision.pointInside(points1[i], rect2)) {
+            total_points_inside = total_points_inside + 1;
+            points_inside_sum = v.add(points_inside_sum, points1[i]);
+        }
+        if (collision.pointInside(points2[i], rect1)) {
+            total_points_inside = total_points_inside + 1;
+            points_inside_sum = v.add(points_inside_sum, points2[i]);
+        }
+        i = i + 1;
+    }
+
+    var collision_point = v.Vector();
+    if (i != 0) {
+        collision_point = v.mul(points_inside_sum, 1.0 / f64(total_points_inside));
+    }
+    else {
+        collision_point = v.mul(v.add(rect1.pos, rect2.pos), 0.5);
+    }
+
+    # sfml.draw_debug_arrow(
+    #     collision_point.x, collision_point.y,
+    #     collision_point.x + separation_vector.x, collision_point.y + separation_vector.y
+    # );
+       
+
+    # Now we have:
+    # - separation_vector, that moves rect1 out of rect2
+    # - collision_point, that is the point of collision, that we will use to calculate the impulse
+
+    # now we also need to impulse
+    # to do that we:
+    # 1. calculate the relative velocity at the collision point
+    # 2. calculate the impulse scalar based on the relative velocity and the collision normal
+    # 3. apply the impulse to the rectangles
+
+    
+    # The speed, rect2 is going towards rect1
+    let relative_velocity = v.sub(
+        collision.relativePointVelocity(rect2, collision_point),
+        collision.relativePointVelocity(rect1, collision_point)
+    );
+
+    # project the relative velocity to the separation vector, to get the velocity along the collision normal:
+    var relative_velocity_along_separating = v.project_to_vector(relative_velocity, separation_vector);
+    let relative_velocity_along_separating_number = v.project_to_number(relative_velocity, separation_vector);
+
+    # builtin_output_i64(i64(relative_velocity_along_separating_number));
+    # builtin_output_i64(i64(math.sqrt(v.length2(relative_velocity_along_separating))));
+
+    # if relative velocity is separating, we don't need to apply impulse:
+    if (relative_velocity_along_separating_number <= 0.0) {
+        relative_velocity_along_separating = v.Vector(0.0, 0.0);
+    }
+
+    # let impulse_strength = v.project_to_number(relative_velocity_along_normal, separation_vector) * (-2.0);
+
+    # we apply some restitution here, to make it look more bouncy, but not perfectly elastic, and to void energy gain from numerical issues.
+    let impulse_vector = v.mul(relative_velocity_along_separating, 0.4); 
+    # @TODO: debug energy gain!
+
+    let friction_axis = v.normal_vector_no_normalize(separation_vector);
+    let friction_axis_speed = v.project_to_vector(relative_velocity, friction_axis);
+    let friction_vector = v.mul(
+        v.normalize(friction_axis_speed),
+        math.min(friction_coefficient, math.sqrt(v.length2(friction_axis_speed)))
+    );
+
+
+
+
+    
+
+    # draw the impulse vector for debugging:
+    # sfml.draw_debug_arrow(
+    #     collision_point.x, collision_point.y,
+    #     collision_point.x + impulse_vector.x, collision_point.y + impulse_vector.y
+    # );
+
+    # Standard impulse application:
+    collision.applyImpulse(rect1, impulse_vector, collision_point);
+    collision.applyImpulse(rect2, v.mul(impulse_vector, -1.0), collision_point);
+
+    # Friction:
+    collision.applyImpulse(rect1, friction_vector, collision_point);
+    collision.applyImpulse(rect2, v.mul(friction_vector, -1.0), collision_point);
+
+    # This moves the rectangles out of each other, so they are not colliding anymore.
+    if (not rect1.wall_like and not rect2.wall_like) {
+        rect1.pos = v.add(rect1.pos, v.mul(separation_vector, 0.5));
+        rect2.pos = v.sub(rect2.pos, v.mul(separation_vector, 0.5));
+    }
+    else if (not rect1.wall_like) {
+        rect1.pos = v.add(rect1.pos, separation_vector);
+    }
+    else if (not rect2.wall_like) {
+        rect2.pos = v.sub(rect2.pos, separation_vector);
+    }
+
+
+    # sfml.draw_debug_arrow(
+    #     rect1.pos.x, rect1.pos.y,
+    #     rect1.pos.x + separation_vector.x, rect1.pos.y + separation_vector.y
+    # );
+
+}

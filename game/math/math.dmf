@@ -1,0 +1,25 @@
+#{
+# Important notice:
+# This code is written in a very early, experimental version of Duckling.
+# The code is not meant to be pretty or well-structured,
+# but rather to be a simple, early test of the language.
+# It assumes an absence of many features, uses some hacks and workarounds,
+# and is generally not a good example of how to write code in Duckling.
+# It might not compile with the newer versions of the compiler.
+#}
+
+extern("C") fundecl math_port_sqrt(x: f64) -> f64;
+extern("C") fundecl math_port_sin(x: f64) -> f64;
+extern("C") fundecl math_port_cos(x: f64) -> f64;
+
+fun sqrt(x: f64) -> f64 = math_port_sqrt(x);
+fun sin(x: f64) -> f64 = math_port_sin(x);
+fun cos(x: f64) -> f64 = math_port_cos(x);
+
+const pi: f64 = 3.14159265358f64;
+const inf: f64 = 1e300;  # 1.0 / 0.0 fails in compile-time for now
+
+fun min(a: f64, b: f64) -> f64 = (if (a < b) then a else b);
+fun max(a: f64, b: f64) -> f64 = (if (a > b) then a else b);
+
+fun abs(x: f64) -> f64 = (if (x < 0.0) then -x else x);

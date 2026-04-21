@@ -1,0 +1,28 @@
+#{
+# Important notice:
+# This code is written in a very early, experimental version of Duckling.
+# The code is not meant to be pretty or well-structured,
+# but rather to be a simple, early test of the language.
+# It assumes an absence of many features, uses some hacks and workarounds,
+# and is generally not a good example of how to write code in Duckling.
+# It might not compile with the newer versions of the compiler.
+# 
+# Rectangle drawing utility.
+#}
+
+import sfml as sfml;
+import game.rect as r;
+import game.vectors as v;
+import game.math as math;
+
+fun drawRectangle(rect: ref r.Rectangle) = {
+    sfml.draw_rectangle(
+        x        = rect.pos.x - rect.width / 2.0,
+        y        = rect.pos.y - rect.height / 2.0,
+        width    = rect.width,
+        height   = rect.height,
+        rotation = rect.rotation * (180.0 / math.pi) # radians to degrees
+    );
+
+    # sfml.draw_debug_arrow(0.0, 0.0, rect.pos.x, rect.pos.y);
+}

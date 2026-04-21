@@ -1,0 +1,57 @@
+#{
+# Important notice:
+# This code is written in a very early, experimental version of Duckling.
+# The code is not meant to be pretty or well-structured,
+# but rather to be a simple, early test of the language.
+# It assumes an absence of many features, uses some hacks and workarounds,
+# and is generally not a good example of how to write code in Duckling.
+# It might not compile with the newer versions of the compiler.
+# 
+# Simple 2D vector math utilities.
+# Note that it was coded before proper methods and operator overloading support.
+#}
+
+import game.math as math;
+
+class Vector {
+    x: f64 = 0.0;
+    y: f64 = 0.0;
+}
+
+fun add(a: Vector, b: Vector) -> Vector = Vector(
+    x = a.x + b.x,
+    y = a.y + b.y
+);
+
+fun sub(a: Vector, b: Vector) -> Vector = Vector(
+    x = a.x - b.x,
+    y = a.y - b.y
+);
+
+fun mul(v: Vector, scalar: f64) -> Vector = Vector(
+    x = v.x * scalar,
+    y = v.y * scalar
+);
+
+fun length2(v: Vector) -> f64 = v.x * v.x + v.y * v.y;
+
+fun normalize(v: Vector) -> Vector = {
+    let length = math.sqrt(length2(v));
+    if (length == 0.0) {
+        return Vector(0.0, 0.0);
+    }
+
+    return mul(v, 1.0 / length);
+}
+
+fun normal_vector(v: Vector) = normalize(Vector(-v.y, v.x));
+
+fun normal_vector_no_normalize(v: Vector) = Vector(-v.y, v.x);
+
+
+fun dot(a: Vector, b: Vector) -> f64 = a.x * b.x + a.y * b.y;
+
+fun project_to_number(v: Vector, axis: Vector) -> f64 = (v.x * axis.x + v.y * axis.y) / math.sqrt(length2(axis));
+
+fun project_to_vector(v: Vector, axis: Vector) -> Vector = mul(normalize(axis), project_to_number(v, axis));
+
