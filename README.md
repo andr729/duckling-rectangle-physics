@@ -1,7 +1,7 @@
 ## Rectangle physics
 
 > [!Note]
-> This is a simple, experimental project written in early, experimental version of Duckling (currently migrated to Duckling `dev-weekly@57f76bb9b`).
+> This is a simple, experimental project written in early version of Duckling (currently migrated to Duckling `dev-weekly@57f76bb9b`).
 > It was initially created as one of a first experiments with the language.
 > See Duckling at [https://duckling.pl/](https://duckling.pl/).
 
