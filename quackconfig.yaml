@@ -1,0 +1,8 @@
+metadata:
+  name: game
+  version: '0.1.0'
+  license: MIT
+  description: Rotating, rigid, 2D rectangle physics simulation
+  # sfml_port is the C++ part of the SFML port, built into build/c by build_cpp.sh.
+  external-libs: [sfml_port, sfml-graphics, sfml-window, sfml-system, stdc++]
+  external-lib-paths: [build/c]

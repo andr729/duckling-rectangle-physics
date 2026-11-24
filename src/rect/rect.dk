@@ -248,7 +248,7 @@ fun collide(rect1: ref Rectangle, rect2: ref Rectangle) -> () = {
 
     var collision_point = v.Vector();
     if (i != 0) {
-        collision_point = v.mul(points_inside_sum, 1.0 / f64(total_points_inside));
+        collision_point = v.mul(points_inside_sum, 1.0 / (total_points_inside as f64));
     }
     else {
         collision_point = v.mul(v.add(rect1.pos, rect2.pos), 0.5);

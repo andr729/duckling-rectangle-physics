@@ -22,7 +22,7 @@ class GameState {
     # var main_rectangle: r.Rectangle;
     # var second_rectangle: r.Rectangle;
 
-    var rectangles: r.Rectangle[rect_count];
+    rectangles: r.Rectangle[rect_count];
 }
 
 
@@ -79,12 +79,12 @@ fun main() = {
     var i = 0;
     while (i < rect_count - 3) {
         game_state.rectangles[i] = r.Rectangle(
-            pos = v.Vector(10.0 + f64(i)*15.0, -3000.0 + f64(i)*80.0),
+            pos = v.Vector(10.0 + (i as f64)*15.0, -3000.0 + (i as f64)*80.0),
             width = 40.0,
             height = 60.0,
             velocity = v.Vector(),
             rotation = 0.0,
-            angular_velocity = 0.12 * f64(i),
+            angular_velocity = 0.12 * (i as f64),
             wall_like = false
         );
         i = i + 1;
