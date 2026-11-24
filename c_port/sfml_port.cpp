@@ -10,6 +10,20 @@
 // this is not a perfect test of the size of double, but it's good enough for our purposes
 static_assert(sizeof(double) == 8, "double must be 64 bits");
 
+// Works with SFML 2 (e.g. 2.6) and SFML 3. Where their APIs differ, the code
+// goes through the helpers below or an `#if SFML_VERSION_MAJOR` block.
+namespace compat {
+#if SFML_VERSION_MAJOR >= 3
+    sf::VideoMode videoMode(unsigned width, unsigned height) { return sf::VideoMode({width, height}); }
+    bool loadFont(sf::Font& font, const char* path) { return font.openFromFile(path); }
+    sf::Angle degrees(float angle) { return sf::degrees(angle); }
+#else
+    sf::VideoMode videoMode(unsigned width, unsigned height) { return sf::VideoMode(width, height); }
+    bool loadFont(sf::Font& font, const char* path) { return font.loadFromFile(path); }
+    float degrees(float angle) { return angle; }
+#endif
+}
+
 namespace internal {
 
     struct State final {
@@ -32,13 +46,32 @@ namespace internal {
         EventsState events_state;
 
         State(): 
-            window(sf::VideoMode(1200, 800), "SFML Duckling Experiment")    
+            window(compat::videoMode(1200, 800), "SFML Duckling Experiment")
         {
             window.setFramerateLimit(120); // make it api call later
         }
     };
 
     std::optional<State> state;
+
+    void key_pressed(sf::Keyboard::Key code) {
+        switch (code) {
+            case sf::Keyboard::Key::Up:
+                state->events_state.arrow_up_pressed = true;
+                break;
+            case sf::Keyboard::Key::Down:
+                state->events_state.arrow_down_pressed = true;
+                break;
+            case sf::Keyboard::Key::Left:
+                state->events_state.arrow_left_pressed = true;
+                break;
+            case sf::Keyboard::Key::Right:
+                state->events_state.arrow_right_pressed = true;
+                break;
+            default:
+                break;
+        }
+    }
 }
 
 extern "C" {
@@ -48,16 +81,21 @@ extern "C" {
 
         // draw fps on screen in bottom left corner:
         sf::Font font;
-        if (!font.loadFromFile("/usr/share/fonts/truetype/freefont/FreeMono.ttf")) { // for now
+        if (!compat::loadFont(font, "/usr/share/fonts/truetype/freefont/FreeMono.ttf")) { // for now
             // error handling
         }
         else {
+            // SFML 3 has no sf::Text constructor without a font.
+#if SFML_VERSION_MAJOR >= 3
+            sf::Text text(font);
+#else
             sf::Text text;
             text.setFont(font);
+#endif
             text.setString("FPS: " + std::to_string(static_cast<int>(1.0 / elapsed)));
             text.setCharacterSize(20);
             text.setFillColor(sf::Color::White);
-            text.setPosition(20.0f, 20.0f);
+            text.setPosition(sf::Vector2f(20.0f, 20.0f));
 
             internal::state->window.draw(text);
         }
@@ -93,39 +131,37 @@ extern "C" {
 
         internal::state->events_state.reset();
 
+        // SFML 3 returns events from pollEvent as std::optional of a variant-like sf::Event,
+        // SFML 2 fills an sf::Event union; both paths pass the key to the same switch.
+#if SFML_VERSION_MAJOR >= 3
+        while (const std::optional event = internal::state->window.pollEvent()) {
+            if (event->is<sf::Event::Closed>()) {
+                internal::state->window.close();
+            }
+            else if (const auto* key_pressed = event->getIf<sf::Event::KeyPressed>()) {
+                internal::key_pressed(key_pressed->code);
+            }
+        }
+#else
         sf::Event event;
         while (internal::state->window.pollEvent(event)) {
             if (event.type == sf::Event::Closed) {
                 internal::state->window.close();
             }
             else if (event.type == sf::Event::KeyPressed) {
-                switch (event.key.code) {
-                    case sf::Keyboard::Up:
-                        internal::state->events_state.arrow_up_pressed = true;
-                        break;
-                    case sf::Keyboard::Down:
-                        internal::state->events_state.arrow_down_pressed = true;
-                        break;
-                    case sf::Keyboard::Left:
-                        internal::state->events_state.arrow_left_pressed = true;
-                        break;
-                    case sf::Keyboard::Right:
-                        internal::state->events_state.arrow_right_pressed = true;
-                        break;
-                    default:
-                        break;
-                }
+                internal::key_pressed(event.key.code);
             }
         }
+#endif
     }
 
     void sfml_draw_rectangle(double x, double y, double width, double height, double rotation) {
         if (!internal::state) return;
         sf::RectangleShape rectangle(sf::Vector2f(static_cast<float>(width), static_cast<float>(height)));
 
-        rectangle.setOrigin(static_cast<float>(width / 2), static_cast<float>(height / 2));
-        rectangle.setPosition(static_cast<float>(x + width / 2), static_cast<float>(y + height / 2));
-        rectangle.setRotation(static_cast<float>(rotation));
+        rectangle.setOrigin(sf::Vector2f(static_cast<float>(width / 2), static_cast<float>(height / 2)));
+        rectangle.setPosition(sf::Vector2f(static_cast<float>(x + width / 2), static_cast<float>(y + height / 2)));
+        rectangle.setRotation(compat::degrees(static_cast<float>(rotation)));
         
         rectangle.setFillColor(sf::Color::Green);
 
@@ -138,18 +174,18 @@ extern "C" {
         sf::RectangleShape line;
         line.setSize(sf::Vector2f(static_cast<float>(std::sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1))), 5.0f));
 
-        line.setOrigin(0.0f, 2.5f);
-        line.setPosition(static_cast<float>(x1 ), static_cast<float>(y1));
-        line.setRotation(static_cast<float>(std::atan2(y2 - y1, x2 - x1) * 180.0 / 3.14159265358979323846));
+        line.setOrigin(sf::Vector2f(0.0f, 2.5f));
+        line.setPosition(sf::Vector2f(static_cast<float>(x1 ), static_cast<float>(y1)));
+        line.setRotation(compat::degrees(static_cast<float>(std::atan2(y2 - y1, x2 - x1) * 180.0 / 3.14159265358979323846)));
         line.setFillColor(sf::Color::Red);
 
         internal::state->window.draw(line);
 
         // add arrow head:
         sf::CircleShape arrow_head(10.0f, 3);
-        arrow_head.setOrigin(10.0f, 10.0f);
-        arrow_head.setPosition(static_cast<float>(x2), static_cast<float>(y2));
-        arrow_head.setRotation(-30 + static_cast<float>(std::atan2(y2 - y1, x2 - x1) * 180.0 / 3.14159265358979323846));
+        arrow_head.setOrigin(sf::Vector2f(10.0f, 10.0f));
+        arrow_head.setPosition(sf::Vector2f(static_cast<float>(x2), static_cast<float>(y2)));
+        arrow_head.setRotation(compat::degrees(-30 + static_cast<float>(std::atan2(y2 - y1, x2 - x1) * 180.0 / 3.14159265358979323846)));
         arrow_head.setFillColor(sf::Color::Red);
 
         internal::state->window.draw(arrow_head);
